@@ -39,6 +39,71 @@
         path: "{{ backend_path }}/.env"
       register: env_file
 
+    # ── Port assignment for new deployments ───────────────────────────────────
+    # Tries to bind each candidate port via Python — guaranteed free on this VPS.
+
+    - name: Find a free Strapi port on the VPS
+      ansible.builtin.shell: |
+        python3 -c "
+        import socket, random
+        while True:
+            p = random.randint(10000, 60000)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.bind(('', p))
+                s.close()
+                print(p)
+                break
+            except OSError:
+                pass
+        "
+      register: _strapi_port
+      changed_when: false
+      when: not env_file.stat.exists
+
+    - name: Find a free Adminer port on the VPS
+      ansible.builtin.shell: |
+        python3 -c "
+        import socket, random
+        used = {{ _strapi_port.stdout | int }}
+        while True:
+            p = random.randint(10000, 60000)
+            if p == used:
+                continue
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.bind(('', p))
+                s.close()
+                print(p)
+                break
+            except OSError:
+                pass
+        "
+      register: _adminer_port
+      changed_when: false
+      when: not env_file.stat.exists
+
+    - name: Set port facts for new deployment
+      ansible.builtin.set_fact:
+        strapi_port: "{{ _strapi_port.stdout | trim }}"
+        adminer_port: "{{ _adminer_port.stdout | trim }}"
+      when: not env_file.stat.exists
+
+    # ── Port facts for re-deployments (read from existing .env) ───────────────
+
+    - name: Read Strapi port from existing .env
+      ansible.builtin.shell: "grep '^STRAPI_PORT=' {{ backend_path }}/.env | cut -d= -f2 || echo '1337'"
+      register: _existing_strapi_port
+      changed_when: false
+      when: env_file.stat.exists
+
+    - name: Set strapi_port fact from existing .env
+      ansible.builtin.set_fact:
+        strapi_port: "{{ _existing_strapi_port.stdout | trim }}"
+      when: env_file.stat.exists
+
+    # ── Create .env and start containers ──────────────────────────────────────
+
     - name: Create .env from template (only when missing)
       ansible.builtin.template:
         src: templates/strapi.env.j2
@@ -52,6 +117,8 @@
         chdir: "{{ backend_path }}"
       register: compose_result
       changed_when: "'Started' in compose_result.stdout or 'Created' in compose_result.stdout or compose_result.rc != 0"
+
+    # ── nginx + SSL ───────────────────────────────────────────────────────────
 
     - name: Install nginx and certbot
       ansible.builtin.apt:
