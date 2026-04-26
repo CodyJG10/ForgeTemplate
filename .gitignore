@@ -9,3 +9,7 @@ infrastructure/cloudflare/vars.sh
 .env
 .env.*
 !.env.example
+
+# Frontend — generated per deployment by setup-cloudflare.sh
+Frontend/wrangler.toml
+Frontend/.wrangler/
