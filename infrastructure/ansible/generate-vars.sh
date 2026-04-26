@@ -38,6 +38,10 @@ gen_app_keys() {
   echo "$(openssl rand -base64 32),$(openssl rand -base64 32)"
 }
 
+rand_port() {
+  awk 'BEGIN{srand(); print int(rand()*50000+10000)}'
+}
+
 warn() { echo "  $*" >&2; }
 
 # ── guard against overwrite ───────────────────────────────────────────────────
@@ -52,10 +56,19 @@ echo ""
 
 # ── deployment ────────────────────────────────────────────────────────────────
 echo "-- Deployment --"
-SITE_NAME=$(prompt "site_name (used as directory name)")
+RAW_SITE_NAME=$(prompt "site_name (used as directory name)")
+SITE_NAME=$(echo "$RAW_SITE_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
+[[ "$SITE_NAME" != "$RAW_SITE_NAME" ]] && warn "Normalized to: $SITE_NAME"
 REPO_URL=$(prompt "repo_url")
 BRANCH=$(prompt "branch" "main")
 BACKEND_SUBDIR=$(prompt "backend_subdir (subdirectory containing docker-compose.yml)" "Backend")
+echo ""
+
+# ── ports ────────────────────────────────────────────────────────────────────
+STRAPI_PORT=$(rand_port)
+ADMINER_PORT=$(rand_port)
+while [[ "$ADMINER_PORT" == "$STRAPI_PORT" ]]; do ADMINER_PORT=$(rand_port); done
+warn "Auto-assigned ports — strapi: $STRAPI_PORT  adminer: $ADMINER_PORT"
 echo ""
 
 # ── domain & SSL ─────────────────────────────────────────────────────────────
@@ -105,6 +118,10 @@ site_name: "$SITE_NAME"
 repo_url: "$REPO_URL"
 branch: "$BRANCH"
 backend_subdir: "$BACKEND_SUBDIR"
+
+# Ports
+strapi_port: "$STRAPI_PORT"
+adminer_port: "$ADMINER_PORT"
 
 # Domain & SSL
 domain_name: "$DOMAIN_NAME"

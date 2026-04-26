@@ -9,9 +9,10 @@ WRANGLER_TOML="$FRONTEND_DIR/wrangler.toml"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 prompt() {
-  local label="$1" default="${2:-}" var
-  if [[ -n "$default" ]]; then
-    read -rp "$label [$default]: " var
+  local label="$1" var
+  if [[ $# -ge 2 ]]; then
+    local default="$2"
+    read -rp "$label [${default:-leave blank to skip}]: " var
     echo "${var:-$default}"
   else
     while true; do
@@ -35,7 +36,7 @@ prompt_secret() {
 
 confirm() {
   local label="$1" default="${2:-y}"
-  read -rp "$label [${default^^}/n]: " ans
+  read -rp "$label [Y/n]: " ans
   [[ "${ans:-$default}" =~ ^[Yy]$ ]]
 }
 
