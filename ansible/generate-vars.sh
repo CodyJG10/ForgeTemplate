@@ -58,6 +58,12 @@ BRANCH=$(prompt "branch" "main")
 BACKEND_SUBDIR=$(prompt "backend_subdir (subdirectory containing docker-compose.yml)" "Backend")
 echo ""
 
+# ── domain & SSL ─────────────────────────────────────────────────────────────
+echo "-- Domain & SSL --"
+DOMAIN_NAME=$(prompt "domain_name (e.g. api.example.com)")
+SSL_EMAIL=$(prompt "ssl_email (used for Let's Encrypt notifications)")
+echo ""
+
 # ── database ─────────────────────────────────────────────────────────────────
 echo "-- Database --"
 DB_NAME=$(prompt "db_name" "strapi")
@@ -100,6 +106,10 @@ repo_url: "$REPO_URL"
 branch: "$BRANCH"
 backend_subdir: "$BACKEND_SUBDIR"
 
+# Domain & SSL
+domain_name: "$DOMAIN_NAME"
+ssl_email: "$SSL_EMAIL"
+
 # Database
 db_name: "$DB_NAME"
 db_username: "$DB_USERNAME"
@@ -117,6 +127,8 @@ EOF
 chmod 600 "$OUT_FILE"
 
 echo "Written to: $OUT_FILE"
+echo ""
+echo "Make sure your domain ($DOMAIN_NAME) has an A record pointing to your VPS before running."
 echo ""
 echo "Next step:"
 echo "  ansible-playbook deploy.yml -i inventory.example -e @vars.yml \\"

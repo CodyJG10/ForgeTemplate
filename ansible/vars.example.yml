@@ -9,6 +9,13 @@ branch: "main"                       # Default: main
 
 # backend_subdir: "Backend"          # Uncomment to override (default: Backend)
 
+# --- Required: domain & SSL ---
+domain_name: "api.example.com"       # Domain pointing to your VPS
+ssl_email: "you@example.com"         # Let's Encrypt notification email
+
+# setup_nginx: true                  # Set to false to skip nginx/SSL setup
+# ssl_enabled: true                  # Set to false to skip SSL (nginx only, no cert)
+
 # --- Required: database credentials (used only when creating .env for the first time) ---
 db_name: "strapi"
 db_username: "strapi"

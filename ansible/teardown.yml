@@ -24,3 +24,18 @@
       ansible.builtin.file:
         path: "{{ site_root }}"
         state: absent
+
+    - name: Remove nginx site config
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/etc/nginx/sites-enabled/{{ site_name }}"
+        - "/etc/nginx/sites-available/{{ site_name }}"
+      notify: reload nginx
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded

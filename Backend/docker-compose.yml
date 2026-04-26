@@ -1,9 +1,8 @@
-version: '3'
 services:
   strapi:
-    container_name: strapi
+    container_name: ${SITE_NAME}_strapi
     build: .
-    image: strapi:latest
+    image: ${SITE_NAME}_strapi:latest
     restart: unless-stopped
     env_file: .env
     environment:
@@ -21,7 +20,6 @@ services:
       - ./src:/opt/app/src
       - ./package.json:/opt/package.json
       - ./yarn.lock:/opt/yarn.lock
-
       - ./.env:/opt/app/.env
       - ./public/uploads:/opt/app/public/uploads
     ports:
@@ -30,10 +28,10 @@ services:
       - strapi
     depends_on:
       - strapiDB
-      
+
   strapiDB:
-    container_name: strapiDB
-    platform: linux/amd64 #for platform error on Apple M1 chips
+    container_name: ${SITE_NAME}_db
+    platform: linux/amd64
     restart: unless-stopped
     env_file: .env
     image: postgres:14.5-alpine
@@ -42,16 +40,14 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: ${DATABASE_NAME}
     volumes:
-      - strapi-data:/var/lib/postgresql/data/ #using a volume
-      #- ./data:/var/lib/postgresql/data/ # if you want to use a bind folder
-
+      - strapi-data:/var/lib/postgresql/data/
     ports:
       - '5432:5432'
     networks:
       - strapi
-      
+
   strapiAdminer:
-    container_name: strapiAdminer
+    container_name: ${SITE_NAME}_adminer
     image: adminer
     restart: unless-stopped
     ports:
@@ -65,8 +61,9 @@ services:
 
 volumes:
   strapi-data:
+    name: ${SITE_NAME}_db_data
 
 networks:
   strapi:
-    name: Strapi
+    name: ${SITE_NAME}_network
     driver: bridge
