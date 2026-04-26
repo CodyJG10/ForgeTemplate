@@ -1,7 +1,7 @@
 FROM node:20-alpine
 # Installing libvips-dev for sharp Compatibility
 RUN apk update && apk add --no-cache build-base gcc autoconf automake zlib-dev libpng-dev nasm bash vips-dev
-ARG NODE_ENV=development
+ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
 
 WORKDIR /opt/
@@ -15,4 +15,4 @@ RUN chown -R node:node /opt/app
 USER node
 RUN NODE_OPTIONS="--max-old-space-size=1536" yarn build
 EXPOSE 1337
-CMD ["yarn", "develop"]
+CMD ["yarn", "start"]
