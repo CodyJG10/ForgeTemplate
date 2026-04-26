@@ -1,0 +1,26 @@
+---
+- name: Tear down Strapi site
+  hosts: strapi_servers
+  become: true
+
+  vars:
+    backend_subdir: "Backend"
+    site_root: "/opt/strapi-sites/{{ site_name }}"
+    backend_path: "{{ site_root }}/repo/{{ backend_subdir }}"
+
+  tasks:
+    - name: Check if backend directory exists
+      ansible.builtin.stat:
+        path: "{{ backend_path }}"
+      register: backend_dir
+
+    - name: Stop and remove containers and volumes
+      ansible.builtin.shell:
+        cmd: docker compose down -v
+        chdir: "{{ backend_path }}"
+      when: backend_dir.stat.exists and backend_dir.stat.isdir
+
+    - name: Remove site directory
+      ansible.builtin.file:
+        path: "{{ site_root }}"
+        state: absent

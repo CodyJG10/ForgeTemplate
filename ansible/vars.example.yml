@@ -1,0 +1,31 @@
+# Copy this file to vars.yml and fill in real values.
+# Pass to ansible-playbook with: -e @vars.yml
+# vars.yml should be in .gitignore — it contains secrets.
+
+# --- Required: deployment ---
+site_name: "myproject"               # Used as directory name: /opt/strapi-sites/<site_name>
+repo_url: "https://github.com/user/repo.git"
+branch: "main"                       # Default: main
+
+# backend_subdir: "Backend"          # Uncomment to override (default: Backend)
+
+# --- Required: database credentials (used only when creating .env for the first time) ---
+db_name: "strapi"
+db_username: "strapi"
+db_password: "changeme"
+# db_port: "5432"                    # Default: 5432
+# db_client: "postgres"              # Default: postgres
+
+# --- Required: Strapi secrets (generate with: openssl rand -base64 32) ---
+# APP_KEYS must be a comma-separated list of at least 2 keys
+strapi_app_keys: "key1base64==,key2base64=="
+strapi_api_token_salt: "changeme"
+strapi_admin_jwt_secret: "changeme"
+strapi_transfer_token_salt: "changeme"
+strapi_jwt_secret: "changeme"
+strapi_encryption_key: "changeme"
+
+# --- Optional overrides ---
+# strapi_host: "0.0.0.0"            # Default: 0.0.0.0
+# strapi_port: "1337"               # Default: 1337
+# node_env: "production"            # Default: production

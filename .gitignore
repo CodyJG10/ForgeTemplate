@@ -1,0 +1,10 @@
+.DS_Store
+
+# Local Ansible deployment inputs
+ansible/vars.yml
+ansible/inventory
+
+# Root-level environment files
+.env
+.env.*
+!.env.example

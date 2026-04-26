@@ -1,0 +1,46 @@
+---
+- name: Deploy Strapi site
+  hosts: strapi_servers
+  become: true
+
+  vars:
+    branch: "main"
+    backend_subdir: "Backend"
+    site_root: "/opt/strapi-sites/{{ site_name }}"
+    repo_dest: "{{ site_root }}/repo"
+    backend_path: "{{ repo_dest }}/{{ backend_subdir }}"
+
+  tasks:
+    - name: Ensure site directory exists
+      ansible.builtin.file:
+        path: "{{ site_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Clone or update repository
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_dest }}"
+        version: "{{ branch }}"
+        update: true
+        force: false
+        accept_hostkey: true
+
+    - name: Check if .env file exists
+      ansible.builtin.stat:
+        path: "{{ backend_path }}/.env"
+      register: env_file
+
+    - name: Create .env from template (only when missing)
+      ansible.builtin.template:
+        src: templates/strapi.env.j2
+        dest: "{{ backend_path }}/.env"
+        mode: "0600"
+      when: not env_file.stat.exists
+
+    - name: Build and start containers
+      ansible.builtin.shell:
+        cmd: docker compose up -d --build
+        chdir: "{{ backend_path }}"
+      register: compose_result
+      changed_when: "'Started' in compose_result.stdout or 'Created' in compose_result.stdout or compose_result.rc != 0"
