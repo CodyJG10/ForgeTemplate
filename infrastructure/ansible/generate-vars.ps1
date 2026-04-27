@@ -1,0 +1,175 @@
+#Requires -Version 5.1
+# Strapi vars.yml generator for Windows.
+# Usage: pwsh -File infrastructure\ansible\generate-vars.ps1  (or via deploy.ps1)
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$OutFile   = Join-Path $ScriptDir "vars.yml"
+
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+function Prompt-Required {
+    param([string]$Label)
+    while ($true) {
+        $val = Read-Host $Label
+        if ($val -ne '') { return $val }
+        Write-Host "  (required)" -ForegroundColor Yellow
+    }
+}
+
+function Prompt-Optional {
+    param([string]$Label, [string]$Default = "")
+    if ($Default -ne '') {
+        $val = Read-Host "$Label [$Default]"
+        if ($val -ne '') { return $val }
+        return $Default
+    } else {
+        return Read-Host "$Label [leave blank to skip]"
+    }
+}
+
+function Prompt-Secret {
+    param([string]$Label)
+    while ($true) {
+        $secure = Read-Host -Prompt $Label -AsSecureString
+        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+        try   { $val = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+        finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+        if ($val -ne '') { return $val }
+        Write-Host "  (required)" -ForegroundColor Yellow
+    }
+}
+
+function New-RandomBase64 {
+    $bytes = [byte[]]::new(32)
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return [Convert]::ToBase64String($bytes)
+}
+
+function New-AppKeys {
+    return "$(New-RandomBase64),$(New-RandomBase64)"
+}
+
+function Write-UnixFile {
+    param([string]$Path, [string]$Content)
+    $lf = $Content -replace "`r`n", "`n"
+    $enc = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $lf, $enc)
+}
+
+function Protect-File {
+    param([string]$Path)
+    try {
+        $acl = Get-Acl $Path
+        $acl.SetAccessRuleProtection($true, $false)
+        $me   = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($me, "FullControl", "Allow")
+        $acl.SetAccessRule($rule)
+        Set-Acl $Path $acl
+    } catch {
+        Write-Host "  Note: could not restrict file permissions: $_" -ForegroundColor Yellow
+    }
+}
+
+# ── guard ──────────────────────────────────────────────────────────────────────
+
+if (Test-Path $OutFile) {
+    $confirm = Read-Host "vars.yml already exists. Overwrite? [y/N]"
+    if ($confirm -notmatch '^[Yy]') { Write-Host "Aborted."; exit 0 }
+}
+
+Write-Host ""
+Write-Host "=== Strapi vars.yml generator ==="
+Write-Host ""
+
+# ── deployment ─────────────────────────────────────────────────────────────────
+
+Write-Host "-- Deployment --"
+$rawSiteName   = Prompt-Required "site_name (used as directory name)"
+$siteName      = ($rawSiteName.ToLower() -replace ' ', '_')
+if ($siteName -ne $rawSiteName) { Write-Host "  Normalized to: $siteName" -ForegroundColor Cyan }
+$repoUrl       = Prompt-Required "repo_url"
+$branch        = Prompt-Optional "branch" "main"
+$backendSubdir = Prompt-Optional "backend_subdir (subdirectory containing docker-compose.yml)" "Backend"
+Write-Host ""
+
+# ── domain & SSL ───────────────────────────────────────────────────────────────
+
+Write-Host "-- Domain & SSL --"
+$domainName = Prompt-Required "domain_name (e.g. api.example.com)"
+$sslEmail   = Prompt-Required "ssl_email (used for Let's Encrypt notifications)"
+Write-Host ""
+
+# ── database ───────────────────────────────────────────────────────────────────
+
+Write-Host "-- Database --"
+$dbName     = Prompt-Optional "db_name" "strapi"
+$dbUsername = Prompt-Optional "db_username" "strapi"
+$dbPassword = Prompt-Secret   "db_password"
+Write-Host ""
+
+# ── Strapi secrets ─────────────────────────────────────────────────────────────
+
+Write-Host "-- Strapi secrets --"
+Write-Host "  Press Enter to auto-generate a secret, or type your own."
+Write-Host ""
+
+$val = Read-Host "  strapi_app_keys [auto-generate]"
+$appKeys = if ($val -ne '') { $val } else { New-AppKeys }
+
+$val = Read-Host "  strapi_api_token_salt [auto-generate]"
+$apiTokenSalt = if ($val -ne '') { $val } else { New-RandomBase64 }
+
+$val = Read-Host "  strapi_admin_jwt_secret [auto-generate]"
+$adminJwtSecret = if ($val -ne '') { $val } else { New-RandomBase64 }
+
+$val = Read-Host "  strapi_transfer_token_salt [auto-generate]"
+$transferTokenSalt = if ($val -ne '') { $val } else { New-RandomBase64 }
+
+$val = Read-Host "  strapi_jwt_secret [auto-generate]"
+$jwtSecret = if ($val -ne '') { $val } else { New-RandomBase64 }
+
+$val = Read-Host "  strapi_encryption_key [auto-generate]"
+$encryptionKey = if ($val -ne '') { $val } else { New-RandomBase64 }
+Write-Host ""
+
+# ── write file ─────────────────────────────────────────────────────────────────
+
+$content = @"
+# Generated by generate-vars.ps1 -- DO NOT COMMIT THIS FILE
+# Add ansible/vars.yml to your .gitignore
+
+# Deployment
+site_name: "$siteName"
+repo_url: "$repoUrl"
+branch: "$branch"
+backend_subdir: "$backendSubdir"
+
+# Domain & SSL
+domain_name: "$domainName"
+ssl_email: "$sslEmail"
+
+# Database
+db_name: "$dbName"
+db_username: "$dbUsername"
+db_password: "$dbPassword"
+
+# Strapi secrets
+strapi_app_keys: "$appKeys"
+strapi_api_token_salt: "$apiTokenSalt"
+strapi_admin_jwt_secret: "$adminJwtSecret"
+strapi_transfer_token_salt: "$transferTokenSalt"
+strapi_jwt_secret: "$jwtSecret"
+strapi_encryption_key: "$encryptionKey"
+"@
+
+Write-UnixFile $OutFile $content
+Protect-File $OutFile
+
+Write-Host "Written to: $OutFile"
+Write-Host ""
+Write-Host "Make sure your domain ($domainName) has an A record pointing to your VPS before running."
+Write-Host ""
+Write-Host "Next step:"
+Write-Host "  pwsh -File infrastructure\deploy.ps1"

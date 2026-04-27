@@ -18,23 +18,40 @@ A full-stack deployment template for **Strapi CMS** (VPS + Docker) and an **Astr
 
 ## Prerequisites
 
+**macOS / Linux**
 - Ansible (`pip install ansible` or `brew install ansible`)
 - Node.js ≥ 22
 - OpenSSL
 - A VPS with Docker + Docker Compose installed, reachable via SSH
 - A domain with DNS pointing to your VPS
 
+**Windows**
+- PowerShell 5.1+ (built-in) or [PowerShell 7](https://aka.ms/powershell) (recommended)
+- [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) with Ansible: `wsl pip install ansible`
+- Node.js ≥ 22 (Windows native)
+- OpenSSH for Windows (built into Windows 10 1809+)
+- A VPS with Docker + Docker Compose installed, reachable via SSH
+- A domain with DNS pointing to your VPS
+
 Optional (enables automatic GitHub secret setup):
-- GitHub CLI: `brew install gh` then `gh auth login`
+- GitHub CLI: `brew install gh` / [gh.cli.github.com](https://cli.github.com) then `gh auth login`
 
 ---
 
 ## Quick start
 
+**macOS / Linux:**
 ```bash
 git clone https://github.com/CodyJG10/ForgeTemplate.git
 cd ForgeTemplate
 bash infrastructure/deploy.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/CodyJG10/ForgeTemplate.git
+cd ForgeTemplate
+pwsh -File infrastructure\deploy.ps1
 ```
 
 The script walks you through everything interactively — no flags required on first run.
@@ -46,7 +63,11 @@ The script walks you through everything interactively — no flags required on f
 All commands are run from the **repo root**:
 
 ```bash
+# macOS / Linux
 bash infrastructure/deploy.sh [command]
+
+# Windows (PowerShell)
+pwsh -File infrastructure\deploy.ps1 [command]
 ```
 
 ### (no flag) — Full deployment
@@ -67,6 +88,8 @@ On re-runs, steps 1 and 2 are skipped automatically if config files already exis
 
 ```bash
 bash infrastructure/deploy.sh --reconfigure
+# Windows:
+pwsh -File infrastructure\deploy.ps1 --reconfigure
 ```
 
 Deletes the existing `vars.yml` (and `vars.sh` for Cloudflare) and re-prompts for all settings before deploying. Use this when:
@@ -80,6 +103,8 @@ Deletes the existing `vars.yml` (and `vars.sh` for Cloudflare) and re-prompts fo
 
 ```bash
 bash infrastructure/deploy.sh --setup-cicd
+# Windows:
+pwsh -File infrastructure\deploy.ps1 --setup-cicd
 ```
 
 Skips deployment entirely and jumps straight to setting GitHub Actions secrets. Use this after your first deploy if you skipped the CI/CD step or need to update the credentials.
@@ -101,6 +126,8 @@ Secrets set:
 
 ```bash
 bash infrastructure/deploy.sh --update-strapi-token
+# Windows:
+pwsh -File infrastructure\deploy.ps1 --update-strapi-token
 ```
 
 After your first deploy, Strapi has no admin account and no API tokens yet. Use this command once you've created your admin and generated a token:
@@ -176,12 +203,15 @@ ForgeTemplate/
 │   ├── Dockerfile                  # Used for VPS deployment
 │   └── astro.config.mjs            # Switches adapter via ASTRO_ADAPTER env var
 ├── infrastructure/
-│   ├── deploy.sh                   # Main deploy script (entry point)
+│   ├── deploy.sh                   # Main deploy script — macOS/Linux
+│   ├── deploy.ps1                  # Main deploy script — Windows
 │   ├── ansible/
 │   │   ├── deploy.yml              # Ansible playbook
 │   │   ├── teardown.yml            # Destroy a site
-│   │   ├── generate-vars.sh        # Backend config wizard
-│   │   ├── setup-frontend-vps.sh   # VPS frontend config wizard
+│   │   ├── generate-vars.sh        # Backend config wizard (macOS/Linux)
+│   │   ├── generate-vars.ps1       # Backend config wizard (Windows)
+│   │   ├── setup-frontend-vps.sh   # VPS frontend config wizard (macOS/Linux)
+│   │   ├── setup-frontend-vps.ps1  # VPS frontend config wizard (Windows)
 │   │   ├── vars.example.yml        # Variable reference (copy to vars.yml)
 │   │   └── templates/
 │   │       ├── strapi.env.j2       # Backend .env template
@@ -189,8 +219,10 @@ ForgeTemplate/
 │   │       ├── nginx.conf.j2       # nginx config for Strapi
 │   │       └── nginx-frontend.conf.j2
 │   └── cloudflare/
-│       ├── setup-cloudflare.sh     # Cloudflare config wizard
-│       └── deploy.sh               # Cloudflare build + deploy
+│       ├── setup-cloudflare.sh     # Cloudflare config wizard (macOS/Linux)
+│       ├── setup-cloudflare.ps1    # Cloudflare config wizard (Windows)
+│       ├── deploy.sh               # Cloudflare build + deploy (macOS/Linux)
+│       └── deploy.ps1              # Cloudflare build + deploy (Windows)
 └── .github/workflows/
     ├── deploy-frontend.yml         # Cloudflare Workers CI/CD
     ├── deploy-backend-vps.yml      # VPS backend CI/CD
@@ -223,3 +255,39 @@ These files are gitignored and must never be committed:
 | `infrastructure/cloudflare/vars.sh` | Cloudflare API token |
 | `Frontend/wrangler.toml` | Generated per deployment |
 | `.env` / `.env.*` | Any local environment files |
+
+---
+
+## Windows notes
+
+The `.ps1` scripts are full equivalents of the `.sh` scripts. A few platform differences to be aware of:
+
+**Ansible runs through WSL**
+
+The VPS deploy step (Step 3) calls Ansible via WSL. Before your first deploy, install Ansible inside your WSL distro:
+
+```powershell
+wsl pip install ansible
+```
+
+The scripts auto-convert Windows paths to WSL paths, so you don't need to do anything manually.
+
+**SSH key auth is the smooth path**
+
+Windows does not have `sshpass`, so password-based VPS connections will fall back to an interactive SSH prompt rather than flowing silently. SSH key auth works natively via the OpenSSH client built into Windows 10 1809+.
+
+If you chose password auth and want to set up CI/CD, the script will offer to generate a deploy key and install it on the VPS automatically — but this step also uses SSH, so you'll be prompted for your password once during the install.
+
+**Password auth + Ansible requires `sshpass` in WSL**
+
+If you connect to your VPS with a password (not an SSH key), Ansible needs `sshpass` inside WSL to authenticate:
+
+```powershell
+wsl apt install sshpass
+```
+
+SSH key auth avoids this entirely.
+
+**Cloudflare deployment is fully native**
+
+The Cloudflare setup and deploy scripts (`setup-cloudflare.ps1`, `cloudflare/deploy.ps1`) run entirely on Windows — no WSL needed. Node.js, npm, npx, and wrangler all work natively.
