@@ -67,7 +67,9 @@ services:
         - PUBLIC_STRAPI_URL
     image: ${SITE_NAME}_frontend:latest
     restart: unless-stopped
-    env_file: ../Frontend/.env
+    env_file:
+      - path: ../Frontend/.env
+        required: false
     environment:
       HOST: 0.0.0.0
       PORT: 4321

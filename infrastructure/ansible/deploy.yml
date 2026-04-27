@@ -34,13 +34,12 @@
         force: false
         accept_hostkey: true
 
-    - name: Check if .env file exists
+    # ── Backend .env and port assignment ──────────────────────────────────────
+
+    - name: Check if backend .env file exists
       ansible.builtin.stat:
         path: "{{ backend_path }}/.env"
       register: env_file
-
-    # ── Port assignment for new deployments ───────────────────────────────────
-    # Tries to bind each candidate port via Python — guaranteed free on this VPS.
 
     - name: Find a free Strapi port on the VPS
       ansible.builtin.shell: |
@@ -89,8 +88,6 @@
         adminer_port: "{{ _adminer_port.stdout | trim }}"
       when: not env_file.stat.exists
 
-    # ── Port facts for re-deployments (read from existing .env) ───────────────
-
     - name: Read Strapi port from existing .env
       ansible.builtin.shell: "grep '^STRAPI_PORT=' {{ backend_path }}/.env | cut -d= -f2 || echo '1337'"
       register: _existing_strapi_port
@@ -102,14 +99,64 @@
         strapi_port: "{{ _existing_strapi_port.stdout | trim }}"
       when: env_file.stat.exists
 
-    # ── Create .env and start containers ──────────────────────────────────────
-
-    - name: Create .env from template (only when missing)
+    - name: Create backend .env from template (only when missing)
       ansible.builtin.template:
         src: templates/strapi.env.j2
         dest: "{{ backend_path }}/.env"
         mode: "0644"
       when: not env_file.stat.exists
+
+    # ── Frontend .env and port assignment (must happen BEFORE containers start) ─
+
+    - name: Check if frontend .env exists
+      ansible.builtin.stat:
+        path: "{{ repo_dest }}/Frontend/.env"
+      register: frontend_env_file
+      when: deploy_frontend_vps | default(false)
+
+    - name: Find a free frontend port on the VPS
+      ansible.builtin.shell: |
+        python3 -c "
+        import socket, random
+        while True:
+            p = random.randint(10000, 60000)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.bind(('', p))
+                s.close()
+                print(p)
+                break
+            except OSError:
+                pass
+        "
+      register: _frontend_port
+      changed_when: false
+      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
+
+    - name: Set frontend_port fact for new deployment
+      ansible.builtin.set_fact:
+        frontend_port: "{{ _frontend_port.stdout | trim }}"
+      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
+
+    - name: Read frontend port from existing .env
+      ansible.builtin.shell: "grep '^FRONTEND_PORT=' {{ repo_dest }}/Frontend/.env | cut -d= -f2 || echo '4321'"
+      register: _existing_frontend_port
+      changed_when: false
+      when: "deploy_frontend_vps | default(false) and (frontend_env_file.stat.exists | default(false))"
+
+    - name: Set frontend_port fact from existing .env
+      ansible.builtin.set_fact:
+        frontend_port: "{{ _existing_frontend_port.stdout | trim }}"
+      when: "deploy_frontend_vps | default(false) and (frontend_env_file.stat.exists | default(false))"
+
+    - name: Create frontend .env from template (only when missing)
+      ansible.builtin.template:
+        src: templates/frontend.env.j2
+        dest: "{{ repo_dest }}/Frontend/.env"
+        mode: "0644"
+      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
+
+    # ── Start containers (both .env files exist by this point) ────────────────
 
     - name: Build and start containers
       ansible.builtin.shell:
@@ -118,7 +165,7 @@
       register: compose_result
       changed_when: "'Started' in compose_result.stdout or 'Created' in compose_result.stdout or compose_result.rc != 0"
 
-    # ── nginx + SSL ───────────────────────────────────────────────────────────
+    # ── nginx + SSL (backend) ─────────────────────────────────────────────────
 
     - name: Install nginx and certbot
       ansible.builtin.apt:
@@ -169,55 +216,7 @@
       register: certbot_result
       changed_when: "'Certificate not yet due for renewal' not in certbot_result.stdout"
 
-    # ── Optional VPS frontend (Astro / Node) ──────────────────────────────────
-
-    - name: Check if frontend .env exists
-      ansible.builtin.stat:
-        path: "{{ repo_dest }}/Frontend/.env"
-      register: frontend_env_file
-      when: deploy_frontend_vps | default(false)
-
-    - name: Find a free frontend port on the VPS
-      ansible.builtin.shell: |
-        python3 -c "
-        import socket, random
-        while True:
-            p = random.randint(10000, 60000)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                s.bind(('', p))
-                s.close()
-                print(p)
-                break
-            except OSError:
-                pass
-        "
-      register: _frontend_port
-      changed_when: false
-      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
-
-    - name: Set frontend_port fact for new deployment
-      ansible.builtin.set_fact:
-        frontend_port: "{{ _frontend_port.stdout | trim }}"
-      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
-
-    - name: Read frontend port from existing .env
-      ansible.builtin.shell: "grep '^FRONTEND_PORT=' {{ repo_dest }}/Frontend/.env | cut -d= -f2 || echo '4321'"
-      register: _existing_frontend_port
-      changed_when: false
-      when: "deploy_frontend_vps | default(false) and (frontend_env_file.stat.exists | default(false))"
-
-    - name: Set frontend_port fact from existing .env
-      ansible.builtin.set_fact:
-        frontend_port: "{{ _existing_frontend_port.stdout | trim }}"
-      when: "deploy_frontend_vps | default(false) and (frontend_env_file.stat.exists | default(false))"
-
-    - name: Create frontend .env from template (only when missing)
-      ansible.builtin.template:
-        src: templates/frontend.env.j2
-        dest: "{{ repo_dest }}/Frontend/.env"
-        mode: "0644"
-      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
+    # ── nginx + SSL (frontend) ────────────────────────────────────────────────
 
     - name: Create nginx frontend config
       ansible.builtin.template:
