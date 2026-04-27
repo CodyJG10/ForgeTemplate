@@ -24,7 +24,7 @@ export CLOUDFLARE_ACCOUNT_ID="$CF_ACCOUNT_ID"
 echo "Building Astro project..."
 cd "$FRONTEND_DIR"
 npm ci
-npm run build
+ASTRO_ADAPTER=cloudflare npm run build
 
 # ── deploy ────────────────────────────────────────────────────────────────────
 echo ""

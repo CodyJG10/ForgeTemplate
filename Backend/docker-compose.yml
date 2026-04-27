@@ -57,6 +57,25 @@ services:
     depends_on:
       - strapiDB
 
+  # ── Optional frontend (activated by: docker compose --profile full up) ────────
+  frontend:
+    profiles: [full]
+    container_name: ${SITE_NAME}_frontend
+    build:
+      context: ../Frontend
+      args:
+        - PUBLIC_STRAPI_URL
+    image: ${SITE_NAME}_frontend:latest
+    restart: unless-stopped
+    env_file: ../Frontend/.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4321
+    ports:
+      - '${FRONTEND_PORT:-4321}:4321'
+    networks:
+      - strapi
+
 volumes:
   strapi-data:
     name: ${SITE_NAME}_db_data

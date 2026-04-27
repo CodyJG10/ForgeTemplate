@@ -1,0 +1,28 @@
+name: Deploy Backend to VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Backend/**"
+      - ".github/workflows/deploy-backend-vps.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Pull & Rebuild on VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/strapi-sites/${{ secrets.VPS_SITE_NAME }}/repo
+            git pull origin ${{ github.ref_name }}
+            cd Backend
+            docker compose up -d --build strapi

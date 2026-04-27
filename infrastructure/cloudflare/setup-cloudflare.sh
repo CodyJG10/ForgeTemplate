@@ -199,7 +199,7 @@ cd "$FRONTEND_DIR"
 # Build first so the worker exists before we can push secrets
 # (wrangler secret put requires the worker to exist on first run — deploy creates it)
 if confirm "Build and do an initial deploy now? (required to push secrets on first run)"; then
-  npm run build
+  ASTRO_ADAPTER=cloudflare npm run build
   npx wrangler deploy
   echo "$STRAPI_API_TOKEN" | npx wrangler secret put STRAPI_API_TOKEN
   info "Secrets pushed."

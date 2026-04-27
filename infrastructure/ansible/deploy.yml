@@ -113,7 +113,7 @@
 
     - name: Build and start containers
       ansible.builtin.shell:
-        cmd: docker compose up -d --build
+        cmd: "docker compose {{ '--profile full' if (deploy_frontend_vps | default(false)) else '' }} up -d --build"
         chdir: "{{ backend_path }}"
       register: compose_result
       changed_when: "'Started' in compose_result.stdout or 'Created' in compose_result.stdout or compose_result.rc != 0"
@@ -168,3 +168,86 @@
       when: setup_nginx and ssl_enabled
       register: certbot_result
       changed_when: "'Certificate not yet due for renewal' not in certbot_result.stdout"
+
+    # ── Optional VPS frontend (Astro / Node) ──────────────────────────────────
+
+    - name: Check if frontend .env exists
+      ansible.builtin.stat:
+        path: "{{ repo_dest }}/Frontend/.env"
+      register: frontend_env_file
+      when: deploy_frontend_vps | default(false)
+
+    - name: Find a free frontend port on the VPS
+      ansible.builtin.shell: |
+        python3 -c "
+        import socket, random
+        while True:
+            p = random.randint(10000, 60000)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.bind(('', p))
+                s.close()
+                print(p)
+                break
+            except OSError:
+                pass
+        "
+      register: _frontend_port
+      changed_when: false
+      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
+
+    - name: Set frontend_port fact for new deployment
+      ansible.builtin.set_fact:
+        frontend_port: "{{ _frontend_port.stdout | trim }}"
+      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
+
+    - name: Read frontend port from existing .env
+      ansible.builtin.shell: "grep '^FRONTEND_PORT=' {{ repo_dest }}/Frontend/.env | cut -d= -f2 || echo '4321'"
+      register: _existing_frontend_port
+      changed_when: false
+      when: "deploy_frontend_vps | default(false) and (frontend_env_file.stat.exists | default(false))"
+
+    - name: Set frontend_port fact from existing .env
+      ansible.builtin.set_fact:
+        frontend_port: "{{ _existing_frontend_port.stdout | trim }}"
+      when: "deploy_frontend_vps | default(false) and (frontend_env_file.stat.exists | default(false))"
+
+    - name: Create frontend .env from template (only when missing)
+      ansible.builtin.template:
+        src: templates/frontend.env.j2
+        dest: "{{ repo_dest }}/Frontend/.env"
+        mode: "0644"
+      when: "deploy_frontend_vps | default(false) and not (frontend_env_file.stat.exists | default(false))"
+
+    - name: Create nginx frontend config
+      ansible.builtin.template:
+        src: templates/nginx-frontend.conf.j2
+        dest: "/etc/nginx/sites-available/{{ site_name }}-frontend"
+        mode: "0644"
+      when: deploy_frontend_vps | default(false) and setup_nginx
+      notify: reload nginx
+
+    - name: Enable nginx frontend site
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ site_name }}-frontend"
+        dest: "/etc/nginx/sites-enabled/{{ site_name }}-frontend"
+        state: link
+      when: deploy_frontend_vps | default(false) and setup_nginx
+      notify: reload nginx
+
+    - name: Flush handlers before frontend certbot
+      ansible.builtin.meta: flush_handlers
+      when: deploy_frontend_vps | default(false)
+
+    - name: Obtain SSL certificate for frontend
+      ansible.builtin.command:
+        cmd: >
+          certbot --nginx
+          -d {{ frontend_domain }}
+          --non-interactive
+          --agree-tos
+          -m {{ ssl_email }}
+          --redirect
+      when: deploy_frontend_vps | default(false) and setup_nginx and ssl_enabled
+      register: certbot_frontend_result
+      changed_when: "'Certificate not yet due for renewal' not in certbot_frontend_result.stdout"

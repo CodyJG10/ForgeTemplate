@@ -30,6 +30,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          ASTRO_ADAPTER: cloudflare
 
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
