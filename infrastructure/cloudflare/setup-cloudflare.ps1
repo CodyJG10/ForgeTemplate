@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # Cloudflare Worker setup wizard for Windows.
 # Usage: pwsh -File infrastructure\cloudflare\setup-cloudflare.ps1  (or via deploy.ps1)
 Set-StrictMode -Version Latest

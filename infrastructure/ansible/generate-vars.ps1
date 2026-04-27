@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # Strapi vars.yml generator for Windows.
 # Usage: pwsh -File infrastructure\ansible\generate-vars.ps1  (or via deploy.ps1)
 Set-StrictMode -Version Latest

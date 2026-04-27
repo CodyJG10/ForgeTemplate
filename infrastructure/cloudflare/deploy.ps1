@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # One-command deploy to Cloudflare Workers.
 # Usage: pwsh -File infrastructure\cloudflare\deploy.ps1  (or via deploy.ps1)
 Set-StrictMode -Version Latest

@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # Full-stack deploy: Strapi backend (VPS) + Astro frontend (Cloudflare Workers or VPS)
 # Usage: pwsh -File infrastructure\deploy.ps1 [--reconfigure] [--setup-cicd] [--update-strapi-token]
 #

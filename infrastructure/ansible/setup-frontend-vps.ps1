@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # VPS frontend configuration — appends to vars.yml.
 # Usage: pwsh -File infrastructure\ansible\setup-frontend-vps.ps1  (or via deploy.ps1)
 Set-StrictMode -Version Latest
