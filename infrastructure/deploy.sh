@@ -8,11 +8,13 @@ ANSIBLE_DIR="$SCRIPT_DIR/ansible"
 CF_DIR="$SCRIPT_DIR/cloudflare"
 RECONFIGURE=false
 SETUP_CICD_ONLY=false
+UPDATE_STRAPI_TOKEN=false
 FRONTEND_MODE=""
 
 for arg in "$@"; do
-  [[ "$arg" == "--reconfigure" ]] && RECONFIGURE=true
-  [[ "$arg" == "--setup-cicd"  ]] && SETUP_CICD_ONLY=true
+  [[ "$arg" == "--reconfigure"          ]] && RECONFIGURE=true
+  [[ "$arg" == "--setup-cicd"           ]] && SETUP_CICD_ONLY=true
+  [[ "$arg" == "--update-strapi-token"  ]] && UPDATE_STRAPI_TOKEN=true
 done
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -110,6 +112,16 @@ run_cicd_setup() {
   fi
 }
 
+# Build SSH_CMD from VPS_USER, VPS_HOST, AUTH_CHOICE, SSH_KEY, VPS_PASS
+build_ssh_cmd() {
+  local opts="-o StrictHostKeyChecking=no"
+  if [[ "$AUTH_CHOICE" == "1" ]]; then
+    SSH_CMD="ssh -i ${SSH_KEY/#\~/$HOME} $opts $VPS_USER@$VPS_HOST"
+  else
+    SSH_CMD="sshpass -p '$VPS_PASS' ssh $opts $VPS_USER@$VPS_HOST"
+  fi
+}
+
 # ── prerequisites ─────────────────────────────────────────────────────────────
 check_cmd ansible-playbook
 check_cmd node
@@ -149,6 +161,69 @@ if [[ "$SETUP_CICD_ONLY" == true ]]; then
   fi
 
   run_cicd_setup
+  exit 0
+fi
+
+# ── --update-strapi-token shortcut ───────────────────────────────────────────
+if [[ "$UPDATE_STRAPI_TOKEN" == true ]]; then
+  if [[ ! -f "$ANSIBLE_DIR/vars.yml" ]]; then
+    echo "Error: vars.yml not found. Run the full deploy first." >&2
+    exit 1
+  fi
+
+  step "Update Strapi API Token"
+
+  SITE_NAME=$(extract_var site_name)
+  GH_REPO=$(extract_var repo_url | sed 's/\.git$//; s|https://github.com/||')
+
+  read -rsp "Strapi API Token (from Strapi admin → Settings → API Tokens): " STRAPI_TOKEN; echo
+  [[ -z "$STRAPI_TOKEN" ]] && { echo "Error: token cannot be empty." >&2; exit 1; }
+  echo ""
+
+  read -rp "VPS IP address: " VPS_HOST
+  read -rp "VPS username [root]: " VPS_USER
+  VPS_USER="${VPS_USER:-root}"
+  echo ""
+  echo "Authentication:"
+  echo "  1) SSH key"
+  echo "  2) Password"
+  read -rp "Choice [1]: " AUTH_CHOICE
+  AUTH_CHOICE="${AUTH_CHOICE:-1}"
+  echo ""
+
+  VPS_PASS=""
+  SSH_KEY=""
+  if [[ "$AUTH_CHOICE" == "1" ]]; then
+    read -rp "Path to SSH key [~/.ssh/id_rsa]: " SSH_KEY
+    SSH_KEY="${SSH_KEY:-~/.ssh/id_rsa}"
+  else
+    read -rsp "VPS password: " VPS_PASS; echo
+  fi
+  build_ssh_cmd
+
+  ENV_PATH="/opt/strapi-sites/$SITE_NAME/repo/Frontend/.env"
+  COMPOSE_DIR="/opt/strapi-sites/$SITE_NAME/repo/Backend"
+
+  echo "  Updating STRAPI_API_TOKEN on VPS ..."
+  $SSH_CMD "bash -s" << REMOTE
+set -e
+sed -i "s|^STRAPI_API_TOKEN=.*|STRAPI_API_TOKEN=$STRAPI_TOKEN|" "$ENV_PATH"
+cd "$COMPOSE_DIR"
+docker compose --profile full up --force-recreate -d frontend
+REMOTE
+  echo "  Frontend container restarted with new token."
+
+  if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+    echo ""
+    read -rp "  Also update STRAPI_API_TOKEN in GitHub Actions secrets? [Y/n]: " _ugh
+    if [[ "${_ugh:-y}" =~ ^[Yy] ]]; then
+      gh secret set STRAPI_API_TOKEN --body "$STRAPI_TOKEN" --repo "$GH_REPO"
+      echo "  GitHub secret updated."
+    fi
+  fi
+
+  echo ""
+  echo "Done. Token active immediately — no redeploy needed."
   exit 0
 fi
 
@@ -228,6 +303,7 @@ else
   read -rsp "VPS password: " VPS_PASS; echo
   ANSIBLE_CONN="-e ansible_host=$VPS_HOST -e ansible_user=$VPS_USER -e ansible_password=$VPS_PASS"
 fi
+build_ssh_cmd
 
 ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
   "$ANSIBLE_DIR/deploy.yml" \
