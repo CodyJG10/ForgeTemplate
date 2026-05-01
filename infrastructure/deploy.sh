@@ -124,34 +124,45 @@ build_ssh_cmd() {
 
 # ── --setup-cicd shortcut (skips deployment, sets secrets only) ───────────────
 if [[ "$SETUP_CICD_ONLY" == true ]]; then
-  if [[ ! -f "$ANSIBLE_DIR/vars.yml" ]]; then
-    echo "Error: vars.yml not found. Run the full deploy first." >&2
-    exit 1
-  fi
-
   step "GitHub Actions CI/CD setup"
 
-  SITE_NAME=$(extract_var site_name)
-  GH_REPO=$(extract_var repo_url | sed 's/\.git$//; s|https://github.com/||')
-
-  read -rp "VPS IP address: " VPS_HOST
-  read -rp "VPS username [root]: " VPS_USER
-  VPS_USER="${VPS_USER:-root}"
-  echo ""
-  echo "Authentication:"
-  echo "  1) SSH key"
-  echo "  2) Password (will generate a deploy key)"
-  read -rp "Choice [1]: " AUTH_CHOICE
-  AUTH_CHOICE="${AUTH_CHOICE:-1}"
-  echo ""
-
-  VPS_PASS=""
-  SSH_KEY=""
-  if [[ "$AUTH_CHOICE" == "1" ]]; then
-    read -rp "Path to SSH key [~/.ssh/id_rsa]: " SSH_KEY
-    SSH_KEY="${SSH_KEY:-~/.ssh/id_rsa}"
+  if [[ -f "$ANSIBLE_DIR/vars.yml" ]]; then
+    SITE_NAME=$(extract_var site_name)
+    GH_REPO=$(extract_var repo_url | sed 's/\.git$//; s|https://github.com/||')
+    VPS_HOST=$(extract_var vps_host)
+    VPS_USER=$(extract_var vps_user)
+    SSH_KEY=$(extract_var ssh_key)
+    AUTH_CHOICE="1"
+    VPS_PASS=""
+    echo "  Read config from vars.yml:"
+    echo "    site_name  $SITE_NAME"
+    echo "    repo       $GH_REPO"
+    echo "    vps_host   $VPS_HOST"
+    echo "    vps_user   $VPS_USER"
+    echo "    ssh_key    $SSH_KEY"
+    echo ""
   else
-    read -rsp "VPS password: " VPS_PASS; echo
+    echo "  vars.yml not found — please enter the values manually."
+    read -rp "  Site name (e.g. myproject): " SITE_NAME
+    read -rp "  GitHub repo (owner/repo): " GH_REPO
+    read -rp "VPS IP address: " VPS_HOST
+    read -rp "VPS username [root]: " VPS_USER
+    VPS_USER="${VPS_USER:-root}"
+    echo ""
+    echo "Authentication:"
+    echo "  1) SSH key"
+    echo "  2) Password (will generate a deploy key)"
+    read -rp "Choice [1]: " AUTH_CHOICE
+    AUTH_CHOICE="${AUTH_CHOICE:-1}"
+    echo ""
+    VPS_PASS=""
+    SSH_KEY=""
+    if [[ "$AUTH_CHOICE" == "1" ]]; then
+      read -rp "Path to SSH key [~/.ssh/id_rsa]: " SSH_KEY
+      SSH_KEY="${SSH_KEY:-~/.ssh/id_rsa}"
+    else
+      read -rsp "VPS password: " VPS_PASS; echo
+    fi
   fi
 
   run_cicd_setup

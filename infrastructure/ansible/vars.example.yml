@@ -2,6 +2,11 @@
 # Pass to ansible-playbook with: -e @vars.yml
 # vars.yml should be in .gitignore — it contains secrets.
 
+# --- Required: VPS connection ---
+vps_host: "1.2.3.4"                  # VPS IP address
+vps_user: "root"                     # SSH user
+ssh_key: "~/.ssh/id_rsa"             # Path to SSH private key
+
 # --- Required: deployment ---
 site_name: "myproject"               # Used as directory name: /opt/strapi-sites/<site_name>
 repo_url: "https://github.com/user/repo.git"
