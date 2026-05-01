@@ -122,12 +122,6 @@ build_ssh_cmd() {
   fi
 }
 
-# ── prerequisites ─────────────────────────────────────────────────────────────
-check_cmd ansible-playbook
-check_cmd node
-check_cmd npm
-check_cmd openssl
-
 # ── --setup-cicd shortcut (skips deployment, sets secrets only) ───────────────
 if [[ "$SETUP_CICD_ONLY" == true ]]; then
   if [[ ! -f "$ANSIBLE_DIR/vars.yml" ]]; then
@@ -226,6 +220,12 @@ REMOTE
   echo "Done. Token active immediately — no redeploy needed."
   exit 0
 fi
+
+# ── prerequisites ─────────────────────────────────────────────────────────────
+check_cmd ansible-playbook
+check_cmd node
+check_cmd npm
+check_cmd openssl
 
 # ── Step 1: Backend config ────────────────────────────────────────────────────
 step "Step 1 — Backend configuration (Strapi)"
